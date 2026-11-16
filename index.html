@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🌶️ Chaat Hannover – Loyalty Card</title>
+
+  <!-- Firebase compat SDK (no build tools needed) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+  <style>
+    /* ─── Design tokens ─────────────────────────────────────────────────────── */
+    :root {
+      --saffron:  #FF6B35;
+      --saffron2: #E55A25;
+      --green:    #2E8B57;
+      --green2:   #246B45;
+      --bg:       #FFF9F5;
+      --card:     #FFFFFF;
+      --text:     #1A1A1A;
+      --muted:    #666;
+      --border:   #EEE;
+      --shadow:   0 4px 20px rgba(0,0,0,.10);
+      --radius:   16px;
+    }
+
+    /* ─── Reset & base ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+    }
+    button { cursor: pointer; border: none; font-family: inherit; }
+    input  { font-family: inherit; }
+
+    /* ─── App shell ─────────────────────────────────────────────────────────── */
+    #app { max-width: 480px; margin: 0 auto; min-height: 100dvh; display: flex; flex-direction: column; }
+
+    /* ─── Top bar ───────────────────────────────────────────────────────────── */
+    .topbar {
+      background: linear-gradient(135deg, var(--saffron) 0%, #FF8C42 100%);
+      color: #fff;
+      padding: 16px 20px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 12px rgba(255,107,53,.35);
+      position: sticky; top: 0; z-index: 10;
+    }
+    .topbar-back {
+      background: rgba(255,255,255,.25);
+      border: none;
+      color: #fff;
+      font-size: 18px;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    .topbar-back:hover { background: rgba(255,255,255,.4); }
+    .topbar h1 { font-size: 18px; font-weight: 700; letter-spacing: -.3px; }
+    .topbar p  { font-size: 12px; opacity: .85; }
+
+    /* ─── Pages ─────────────────────────────────────────────────────────────── */
+    .page { flex: 1; display: none; flex-direction: column; }
+    .page.active { display: flex; }
+
+    /* ─── Home page ─────────────────────────────────────────────────────────── */
+    .home-content { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+    /* Search */
+    .search-wrap {
+      position: relative;
+    }
+    .search-wrap input {
+      width: 100%;
+      padding: 12px 16px 12px 44px;
+      border: 2px solid var(--border);
+      border-radius: 50px;
+      font-size: 15px;
+      background: var(--card);
+      outline: none;
+      transition: border-color .2s;
+    }
+    .search-wrap input:focus { border-color: var(--saffron); }
+    .search-wrap .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 18px; }
+
+    /* Stats strip */
+    .stats-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .stat-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 12px 8px;
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+    .stat-card .val { font-size: 22px; font-weight: 800; color: var(--saffron); }
+    .stat-card .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* Customer list */
+    .section-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; padding: 4px 2px; }
+    #customer-list { display: flex; flex-direction: column; gap: 8px; }
+    .cust-row {
+      background: var(--card);
+      border-radius: 14px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,.07);
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .cust-row:active { transform: scale(.98); }
+    .cust-avatar {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--saffron), #FFB347);
+      color: #fff;
+      font-size: 18px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .cust-info { flex: 1; min-width: 0; }
+    .cust-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cust-phone { font-size: 12px; color: var(--muted); }
+    .stamp-badge {
+      background: var(--saffron);
+      color: #fff;
+      font-size: 12px; font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+    .stamp-badge.reward { background: var(--green); }
+
+    .empty-state { text-align: center; padding: 48px 16px; color: var(--muted); }
+    .empty-state .emoji { font-size: 48px; margin-bottom: 12px; }
+
+    /* FAB */
+    .fab {
+      position: fixed;
+      bottom: 24px;
+      right: 24px; /* will be shifted to center on narrow screens via JS... use right offset instead */
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--saffron), var(--saffron2));
+      color: #fff;
+      font-size: 26px;
+      box-shadow: 0 4px 16px rgba(255,107,53,.5);
+      display: flex; align-items: center; justify-content: center;
+      transition: transform .2s, box-shadow .2s;
+      z-index: 9;
+    }
+    .fab:active { transform: scale(.92); box-shadow: 0 2px 8px rgba(255,107,53,.4); }
+
+    /* ─── Customer card page ─────────────────────────────────────────────────── */
+    .card-content { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+
+    /* Hero info */
+    .hero-block {
+      background: linear-gradient(135deg, var(--saffron) 0%, #FF8C42 100%);
+      border-radius: var(--radius);
+      padding: 20px;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .hero-avatar {
+      width: 56px; height: 56px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.3);
+      font-size: 24px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .hero-name  { font-size: 19px; font-weight: 800; }
+    .hero-phone { font-size: 13px; opacity: .85; }
+    .hero-total { font-size: 12px; opacity: .75; margin-top: 2px; }
+
+    /* Stamp grid */
+    .stamp-section {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .stamp-section h2 { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .stamp-section p  { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+    .stamp-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+    .stamp-circle {
+      aspect-ratio: 1;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      background: #F5F5F5;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      transition: background .2s, border-color .2s;
+      position: relative;
+    }
+    .stamp-circle.filled {
+      background: linear-gradient(135deg, var(--saffron), #FFB347);
+      border-color: var(--saffron);
+    }
+    .stamp-circle.milestone-10 { border: 2px solid var(--green); }
+    .stamp-circle.milestone-20 { border: 2px solid #9B59B6; }
+    .stamp-number {
+      position: absolute;
+      bottom: -18px;
+      left: 50%; transform: translateX(-50%);
+      font-size: 9px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .stamp-grid-wrap { padding-bottom: 20px; }
+
+    /* Reward cards */
+    .reward-cards { display: flex; flex-direction: column; gap: 10px; }
+    .reward-card {
+      border-radius: 14px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .reward-card.locked   { background: #F5F5F5; border: 2px dashed #DDD; }
+    .reward-card.unlocked { background: linear-gradient(135deg, #EAFAF1, #D5F5E3); border: 2px solid var(--green); }
+    .reward-card.claimed  { background: #F5F5F5; border: 2px solid #CCC; opacity: .65; }
+    .reward-icon { font-size: 32px; }
+    .reward-info { flex: 1; }
+    .reward-title { font-weight: 700; font-size: 14px; }
+    .reward-desc  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .reward-progress { font-size: 11px; color: var(--saffron); font-weight: 600; }
+    .redeem-btn {
+      background: var(--green);
+      color: #fff;
+      padding: 8px 16px;
+      border-radius: 50px;
+      font-size: 13px; font-weight: 700;
+      transition: background .2s;
+      white-space: nowrap;
+    }
+    .redeem-btn:hover { background: var(--green2); }
+
+    /* Action buttons */
+    .action-row { display: flex; gap: 10px; }
+    .btn-primary {
+      flex: 1;
+      background: linear-gradient(135deg, var(--saffron), var(--saffron2));
+      color: #fff;
+      padding: 14px;
+      border-radius: 50px;
+      font-size: 15px; font-weight: 700;
+      text-align: center;
+      box-shadow: 0 3px 12px rgba(255,107,53,.35);
+      transition: opacity .2s;
+    }
+    .btn-primary:active { opacity: .85; }
+    .btn-secondary {
+      flex: 1;
+      background: var(--card);
+      border: 2px solid var(--border);
+      color: var(--text);
+      padding: 14px;
+      border-radius: 50px;
+      font-size: 15px; font-weight: 600;
+      text-align: center;
+      transition: background .2s;
+    }
+    .btn-secondary:active { background: #F0F0F0; }
+
+    /* ─── Modals ─────────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.55);
+      z-index: 100;
+      display: none;
+      align-items: flex-end;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--card);
+      border-radius: 24px 24px 0 0;
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 24px 20px 36px;
+      max-height: 85dvh;
+      overflow-y: auto;
+      animation: slideUp .28s ease-out;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .modal-handle {
+      width: 40px; height: 4px;
+      background: #DDD;
+      border-radius: 4px;
+      margin: 0 auto 18px;
+    }
+    .modal h2 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
+    .modal p  { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+
+    /* Form */
+    .form-group { margin-bottom: 14px; }
+    .form-group label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    .form-group input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .form-group input:focus { border-color: var(--saffron); }
+    .form-group input[type=number] { -moz-appearance: textfield; }
+    .form-group input[type=number]::-webkit-outer-spin-button,
+    .form-group input[type=number]::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+    .stamp-preview {
+      background: linear-gradient(135deg, var(--bg), #FFE8D9);
+      border: 2px solid #FFDCC8;
+      border-radius: 14px;
+      padding: 14px;
+      text-align: center;
+      margin-bottom: 14px;
+    }
+    .stamp-preview .big { font-size: 28px; font-weight: 900; color: var(--saffron); }
+    .stamp-preview .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    /* Transaction history list */
+    #tx-list { display: flex; flex-direction: column; gap: 8px; max-height: 55dvh; overflow-y: auto; }
+    .tx-row {
+      background: var(--bg);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .tx-icon  { font-size: 22px; }
+    .tx-info  { flex: 1; }
+    .tx-title { font-size: 14px; font-weight: 600; }
+    .tx-date  { font-size: 11px; color: var(--muted); }
+    .tx-badge { font-size: 12px; font-weight: 700; color: var(--saffron); }
+
+    /* Confirm modal highlight box */
+    .confirm-box {
+      background: linear-gradient(135deg, #EAFAF1, #D5F5E3);
+      border: 2px solid var(--green);
+      border-radius: 14px;
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .confirm-box .big { font-size: 40px; }
+    .confirm-box .text { font-size: 15px; font-weight: 700; color: var(--green); margin-top: 6px; }
+
+    .btn-row { display: flex; gap: 10px; margin-top: 4px; }
+    .btn-row .btn-primary  { flex: 2; }
+    .btn-row .btn-secondary { flex: 1; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 40px; color: var(--muted); font-size: 15px; }
+    .spin { display: inline-block; animation: spin 1s linear infinite; font-size: 28px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 90px;
+      left: 50%; transform: translateX(-50%);
+      background: #1A1A1A;
+      color: #fff;
+      padding: 12px 20px;
+      border-radius: 50px;
+      font-size: 14px; font-weight: 600;
+      box-shadow: 0 4px 20px rgba(0,0,0,.25);
+      z-index: 200;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .3s;
+      white-space: nowrap;
+    }
+    #toast.show { opacity: 1; }
+
+    /* Config warning banner */
+    .config-warn {
+      background: #FFF3CD;
+      border: 2px solid #FFC107;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin: 16px;
+    }
+    .config-warn strong { color: #856404; }
+
+    /* Responsive tweak for wider screens */
+    @media (min-width: 480px) {
+      #app { box-shadow: 0 0 40px rgba(0,0,0,.12); }
+      .fab { right: calc(50% - 220px); }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ═══ PAGE: HOME ══════════════════════════════════════════════════════════ -->
+  <div id="page-home" class="page active">
+    <div class="topbar">
+      <div>
+        <h1>🌶️ Chaat Hannover</h1>
+        <p>Loyalty Card System</p>
+      </div>
+    </div>
+    <div class="home-content">
+      <div id="config-banner"></div>
+
+      <div class="stats-strip" id="stats-strip">
+        <div class="stat-card"><div class="val" id="stat-customers">—</div><div class="lbl">Customers</div></div>
+        <div class="stat-card"><div class="val" id="stat-stamps">—</div><div class="lbl">Stamps Today</div></div>
+        <div class="stat-card"><div class="val" id="stat-rewards">—</div><div class="lbl">Rewards Given</div></div>
+      </div>
+
+      <div class="search-wrap">
+        <span class="icon">🔍</span>
+        <input type="search" id="search-input" placeholder="Search by name or phone…" oninput="searchCustomers()" />
+      </div>
+
+      <div class="section-title">Customers</div>
+      <div id="customer-list">
+        <div class="loading"><div class="spin">⏳</div><br>Loading…</div>
+      </div>
+    </div>
+    <button class="fab" onclick="openModal('modal-register')" title="New customer">＋</button>
+  </div>
+
+  <!-- ═══ PAGE: CUSTOMER CARD ════════════════════════════════════════════════ -->
+  <div id="page-card" class="page">
+    <div class="topbar">
+      <button class="topbar-back" onclick="goHome()">←</button>
+      <div>
+        <h1 id="card-header-name">Customer</h1>
+        <p id="card-header-sub">Loyalty Card</p>
+      </div>
+    </div>
+    <div class="card-content" id="card-content">
+      <div class="loading"><div class="spin">⏳</div><br>Loading…</div>
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ═══ MODAL: REGISTER CUSTOMER ════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-register" onclick="overlayClose(event,'modal-register')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>➕ New Customer</h2>
+    <p>Register a new loyalty card</p>
+    <div class="form-group">
+      <label>Full Name *</label>
+      <input type="text" id="reg-name" placeholder="e.g. Priya Müller" />
+    </div>
+    <div class="form-group">
+      <label>Phone Number *</label>
+      <input type="tel" id="reg-phone" placeholder="e.g. +49 511 …" />
+    </div>
+    <button class="btn-primary" onclick="registerCustomer()" style="width:100%">Create Card 🎉</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: ADD PURCHASE ══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-purchase" onclick="overlayClose(event,'modal-purchase')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>🛒 Add Purchase</h2>
+    <p>Enter the total amount paid today</p>
+    <div class="form-group">
+      <label>Amount Paid (€)</label>
+      <input type="number" id="pur-amount" min="1" max="500" step="0.5" placeholder="e.g. 15" oninput="updateStampPreview()" />
+    </div>
+    <div class="stamp-preview" id="stamp-preview">
+      <div class="big">0 🌶️</div>
+      <div class="sub">stamps will be added</div>
+    </div>
+    <button class="btn-primary" onclick="confirmPurchase()" style="width:100%">Add Stamps ✅</button>
+  </div>
+</div>
+
+<!-- ═══ MODAL: REDEEM CONFIRM ════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-redeem" onclick="overlayClose(event,'modal-redeem')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>🎁 Redeem Reward</h2>
+    <p id="redeem-desc">Confirm redemption</p>
+    <div class="confirm-box" id="redeem-box">
+      <div class="big" id="redeem-icon">🎉</div>
+      <div class="text" id="redeem-text">Reward!</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn-primary" onclick="confirmRedeem()">Yes, Redeem! 🎉</button>
+      <button class="btn-secondary" onclick="closeModal('modal-redeem')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ MODAL: TRANSACTION HISTORY ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="modal-history" onclick="overlayClose(event,'modal-history')">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>📜 Transaction History</h2>
+    <p id="history-cust-name" style="margin-bottom:12px"></p>
+    <div id="tx-list"></div>
+  </div>
+</div>
+
+<!-- ═══ TOAST ════════════════════════════════════════════════════════════════ -->
+<div id="toast"></div>
+
+<script>
+/* ============================================================
+   ██████╗  ██████╗ ███╗   ██╗███████╗██╗ ██████╗
+   ██╔════╝██╔═══██╗████╗  ██║██╔════╝██║██╔════╝
+   ██║     ██║   ██║██╔██╗ ██║█████╗  ██║██║  ███╗
+   ██║     ██║   ██║██║╚██╗██║██╔══╝  ██║██║   ██║
+   ╚██████╗╚██████╔╝██║ ╚████║██║     ██║╚██████╔╝
+    ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝     ╚═╝ ╚═════╝
+
+   ⚠️  REPLACE THE VALUES BELOW WITH YOUR OWN FIREBASE CONFIG
+   Steps to get them: see README/deployment guide below
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyAPe6S3r-4O2FyNqXNdjKJlGpCJzIU0SuI",
+  authDomain: "chaat-hannover.firebaseapp.com",
+  projectId: "chaat-hannover",
+  storageBucket: "chaat-hannover.firebasestorage.app",
+  messagingSenderId: "12942238759",
+  appId: "1:12942238759:web:eb3664fb18847d74c2da02",
+  measurementId: "G-W3YXJ1DWHF"
+};
+
+/* ─── Loyalty rules ────────────────────────────────────────── */
+const EUROS_PER_STAMP    = 5;    // €5 spent  = 1 stamp
+const REWARD1_STAMPS     = 10;   // 10 stamps = free 3€ chaat
+const REWARD2_STAMPS     = 20;   // 20 stamps = any chaat + chai FREE  (card resets)
+
+/* ─── State ────────────────────────────────────────────────── */
+let db            = null;
+let customers     = [];    // full list from Firestore
+let filteredCusts = [];    // after search filter
+let currentCustId = null;  // ID of open customer card
+let redeemType    = null;  // 'reward1' | 'reward2'
+let configOk      = false;
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════════════ */
+function initApp () {
+  // Detect placeholder config
+  if (FIREBASE_CONFIG.apiKey === "YOUR_API_KEY") {
+    showConfigWarning();
+    return;
+  }
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+    configOk = true;
+    loadCustomers();
+  } catch(e) {
+    console.error(e);
+    showConfigWarning("Firebase init failed: " + e.message);
+  }
+}
+
+function showConfigWarning (extra) {
+  document.getElementById('config-banner').innerHTML = `
+    <div class="config-warn">
+      <strong>⚠️ Setup Required</strong><br>
+      Replace the <code>FIREBASE_CONFIG</code> values in this file with your own
+      Firebase project credentials. See the setup guide below or in the README.<br>
+      ${extra ? '<br><em>'+extra+'</em>' : ''}
+    </div>`;
+  document.getElementById('customer-list').innerHTML =
+    '<div class="empty-state"><div class="emoji">🔧</div><div>Connect Firebase to start</div></div>';
+  document.getElementById('stat-customers').textContent = '0';
+  document.getElementById('stat-stamps').textContent    = '0';
+  document.getElementById('stat-rewards').textContent   = '0';
+}
+
+/* ═══════════════════════════════════════════════════════════
+   FIRESTORE – LOAD CUSTOMERS
+══════════════════════════════════════════════════════════════ */
+async function loadCustomers () {
+  try {
+    const snap = await db.collection('customers').orderBy('name').get();
+    customers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderHome();
+  } catch(e) {
+    console.error(e);
+    document.getElementById('customer-list').innerHTML =
+      '<div class="empty-state"><div class="emoji">😕</div><div>Could not load customers.<br>Check Firestore rules.</div></div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HOME PAGE RENDER
+══════════════════════════════════════════════════════════════ */
+function renderHome () {
+  // Stats
+  const totalRewards = customers.reduce((s,c) => s + (c.totalRewards||0), 0);
+  // "stamps today" — count from transactions added today
+  const today = new Date().toDateString();
+  const stampsToday = customers.reduce((s,c) => {
+    return s + (c.transactions||[]).filter(t => {
+      if (!t.date) return false;
+      const d = t.date.toDate ? t.date.toDate() : new Date(t.date);
+      return d.toDateString() === today && t.type === 'purchase';
+    }).reduce((ss,t) => ss + (t.stampsAdded||0), 0);
+  }, 0);
+
+  document.getElementById('stat-customers').textContent = customers.length;
+  document.getElementById('stat-stamps').textContent    = stampsToday;
+  document.getElementById('stat-rewards').textContent   = totalRewards;
+
+  filteredCusts = customers;
+  renderList(filteredCusts);
+}
+
+function renderList (list) {
+  const el = document.getElementById('customer-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty-state"><div class="emoji">🧑‍🤝‍🧑</div><div>No customers yet.<br>Tap ＋ to add one!</div></div>';
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const stamps  = c.stamps || 0;
+    const hasR1   = stamps >= REWARD1_STAMPS && !c.reward1Claimed;
+    const hasR2   = stamps >= REWARD2_STAMPS && !c.reward2Claimed;
+    const badgeCls = (hasR1 || hasR2) ? 'stamp-badge reward' : 'stamp-badge';
+    const badgeTxt = (hasR2 ? '🎁 Reward!' : hasR1 ? '🎁 Reward!' : `${stamps}/${REWARD2_STAMPS} 🌶️`);
+    const initial  = (c.name||'?')[0].toUpperCase();
+    return `
+      <div class="cust-row" onclick="openCustomer('${c.id}')">
+        <div class="cust-avatar">${initial}</div>
+        <div class="cust-info">
+          <div class="cust-name">${esc(c.name)}</div>
+          <div class="cust-phone">${esc(c.phone||'')}</div>
+        </div>
+        <span class="${badgeCls}">${badgeTxt}</span>
+      </div>`;
+  }).join('');
+}
+
+function searchCustomers () {
+  const q = document.getElementById('search-input').value.trim().toLowerCase();
+  filteredCusts = q
+    ? customers.filter(c =>
+        (c.name||'').toLowerCase().includes(q) ||
+        (c.phone||'').toLowerCase().includes(q))
+    : customers;
+  renderList(filteredCusts);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CUSTOMER CARD
+══════════════════════════════════════════════════════════════ */
+async function openCustomer (id) {
+  currentCustId = id;
+  showPage('page-card');
+
+  const el = document.getElementById('card-content');
+  el.innerHTML = '<div class="loading"><div class="spin">⏳</div><br>Loading…</div>';
+
+  try {
+    const doc = await db.collection('customers').doc(id).get();
+    if (!doc.exists) { toast('Customer not found'); goHome(); return; }
+    renderCard({ id, ...doc.data() });
+  } catch(e) {
+    el.innerHTML = '<div class="loading">Error loading. Please retry.</div>';
+  }
+}
+
+function renderCard (c) {
+  const stamps       = c.stamps       || 0;
+  const totalStamps  = c.totalStamps  || 0;
+  const totalVisits  = c.totalVisits  || 0;
+  const totalRewards = c.totalRewards || 0;
+  const r1Ready   = stamps >= REWARD1_STAMPS && !c.reward1Claimed;
+  const r2Ready   = stamps >= REWARD2_STAMPS && !c.reward2Claimed;
+
+  // Topbar
+  document.getElementById('card-header-name').textContent = c.name || 'Customer';
+  document.getElementById('card-header-sub').textContent  = c.phone || 'Loyalty Card';
+
+  // Build stamp circles (1–20)
+  let circles = '';
+  for (let i = 1; i <= REWARD2_STAMPS; i++) {
+    const filled  = i <= stamps ? ' filled' : '';
+    const ms10    = i === REWARD1_STAMPS ? ' milestone-10' : '';
+    const ms20    = i === REWARD2_STAMPS ? ' milestone-20' : '';
+    const emoji   = filled ? '🌶️' : '';
+    circles += `<div class="stamp-circle${filled}${ms10}${ms20}">${emoji}</div>`;
+  }
+
+  // Reward 1 state
+  let r1Class = 'locked', r1Action = '';
+  if (r1Ready) {
+    r1Class  = 'unlocked';
+    r1Action = `<button class="redeem-btn" onclick="initiateRedeem('reward1')">Redeem 🎁</button>`;
+  } else if (c.reward1Claimed) {
+    r1Class  = 'claimed';
+    r1Action = '<span style="font-size:12px;color:#999">Used ✓</span>';
+  } else {
+    r1Action = `<span class="reward-progress">${stamps}/${REWARD1_STAMPS} stamps</span>`;
+  }
+
+  // Reward 2 state
+  let r2Class = 'locked', r2Action = '';
+  if (r2Ready) {
+    r2Class  = 'unlocked';
+    r2Action = `<button class="redeem-btn" onclick="initiateRedeem('reward2')">Redeem 🎁</button>`;
+  } else {
+    r2Action = `<span class="reward-progress">${stamps}/${REWARD2_STAMPS} stamps</span>`;
+  }
+
+  document.getElementById('card-content').innerHTML = `
+    <div class="hero-block">
+      <div class="hero-avatar">${(c.name||'?')[0].toUpperCase()}</div>
+      <div>
+        <div class="hero-name">${esc(c.name)}</div>
+        <div class="hero-phone">${esc(c.phone||'')}</div>
+        <div class="hero-total">🌶️ ${totalStamps} lifetime stamps · 🛍️ ${totalVisits} visits · 🎁 ${totalRewards} rewards</div>
+      </div>
+    </div>
+
+    <div class="stamp-section">
+      <h2>Stamp Card</h2>
+      <p>${stamps} of ${REWARD2_STAMPS} stamps — €${EUROS_PER_STAMP} spent = 1 stamp</p>
+      <div class="stamp-grid-wrap">
+        <div class="stamp-grid">${circles}</div>
+      </div>
+    </div>
+
+    <div class="reward-cards">
+      <div class="reward-card ${r1Class}">
+        <div class="reward-icon">🍛</div>
+        <div class="reward-info">
+          <div class="reward-title">10 Stamps – Free Chaat</div>
+          <div class="reward-desc">Any chaat item up to €3 free</div>
+        </div>
+        ${r1Action}
+      </div>
+      <div class="reward-card ${r2Class}">
+        <div class="reward-icon">🎉</div>
+        <div class="reward-info">
+          <div class="reward-title">20 Stamps – Chaat + Chai</div>
+          <div class="reward-desc">Any chaat + 1 Masala Chai free · Card resets</div>
+        </div>
+        ${r2Action}
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn-primary" onclick="openModal('modal-purchase')">Add Purchase 🛒</button>
+      <button class="btn-secondary" onclick="openHistory()">History 📜</button>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REGISTER CUSTOMER
+══════════════════════════════════════════════════════════════ */
+async function registerCustomer () {
+  const name  = document.getElementById('reg-name').value.trim();
+  const phone = document.getElementById('reg-phone').value.trim();
+  if (!name)  { toast('❌ Please enter a name');         return; }
+  if (!phone) { toast('❌ Please enter a phone number'); return; }
+
+  try {
+    const docRef = await db.collection('customers').add({
+      name, phone,
+      stamps: 0, totalStamps: 0,
+      totalVisits: 0, totalRewards: 0,
+      reward1Claimed: false, reward2Claimed: false,
+      transactions: [],
+      registeredAt: firebase.firestore.FieldValue.serverTimestamp(),
+      lastVisit:    firebase.firestore.FieldValue.serverTimestamp()
+    });
+    closeModal('modal-register');
+    document.getElementById('reg-name').value  = '';
+    document.getElementById('reg-phone').value = '';
+    await loadCustomers();
+    toast(`✅ ${name} registered!`);
+    openCustomer(docRef.id);
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ADD PURCHASE
+══════════════════════════════════════════════════════════════ */
+function updateStampPreview () {
+  const amt    = parseFloat(document.getElementById('pur-amount').value) || 0;
+  const stamps = Math.floor(amt / EUROS_PER_STAMP);
+  document.getElementById('stamp-preview').innerHTML = `
+    <div class="big">${stamps} 🌶️</div>
+    <div class="sub">${stamps === 1 ? '1 stamp' : stamps + ' stamps'} will be added (€${amt.toFixed(2)} ÷ €${EUROS_PER_STAMP})</div>`;
+}
+
+async function confirmPurchase () {
+  if (!currentCustId) return;
+  const amt = parseFloat(document.getElementById('pur-amount').value);
+  if (!amt || amt <= 0) { toast('❌ Enter a valid amount'); return; }
+
+  const newStamps = Math.floor(amt / EUROS_PER_STAMP);
+  if (newStamps === 0) { toast(`ℹ️ Minimum €${EUROS_PER_STAMP} for 1 stamp`); return; }
+
+  try {
+    const docRef  = db.collection('customers').doc(currentCustId);
+    const snap    = await docRef.get();
+    const c       = snap.data();
+    const updated = Math.min((c.stamps||0) + newStamps, REWARD2_STAMPS);
+
+    await docRef.update({
+      stamps:      updated,
+      totalStamps: firebase.firestore.FieldValue.increment(newStamps),
+      totalVisits: firebase.firestore.FieldValue.increment(1),
+      lastVisit:   firebase.firestore.FieldValue.serverTimestamp(),
+      transactions: firebase.firestore.FieldValue.arrayUnion({
+        type:       'purchase',
+        amount:     amt,
+        stampsAdded: newStamps,
+        date:       new Date().toISOString()
+      })
+    });
+
+    closeModal('modal-purchase');
+    document.getElementById('pur-amount').value = '';
+    updateStampPreview();
+    toast(`+${newStamps} stamp${newStamps>1?'s':''} added! 🌶️`);
+    await loadCustomers();
+    openCustomer(currentCustId);
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REDEEM REWARDS
+══════════════════════════════════════════════════════════════ */
+function initiateRedeem (type) {
+  redeemType = type;
+  if (type === 'reward1') {
+    document.getElementById('redeem-desc').textContent  = 'Customer gets 1 free chaat item (up to €3 value)';
+    document.getElementById('redeem-icon').textContent  = '🍛';
+    document.getElementById('redeem-text').textContent  = 'FREE Chaat (up to €3)';
+  } else {
+    document.getElementById('redeem-desc').textContent  = 'Customer gets any chaat + 1 Masala Chai FREE. Card will reset to 0 stamps.';
+    document.getElementById('redeem-icon').textContent  = '🎉';
+    document.getElementById('redeem-text').textContent  = 'Any Chaat + Masala Chai FREE!\nCard resets ♻️';
+  }
+  openModal('modal-redeem');
+}
+
+async function confirmRedeem () {
+  if (!currentCustId || !redeemType) return;
+  try {
+    const docRef = db.collection('customers').doc(currentCustId);
+    const snap   = await docRef.get();
+    const c      = snap.data();
+
+    const tx = {
+      type:  redeemType === 'reward1' ? 'redeem_chaat' : 'redeem_chaat_chai',
+      label: redeemType === 'reward1' ? 'Free Chaat Redeemed' : 'Chaat + Chai Redeemed',
+      date:  new Date().toISOString()
+    };
+
+    const update = {
+      totalRewards: firebase.firestore.FieldValue.increment(1),
+      transactions: firebase.firestore.FieldValue.arrayUnion(tx)
+    };
+
+    if (redeemType === 'reward1') {
+      update.reward1Claimed = true;
+    } else {
+      // Mega reward: reset entire card
+      update.stamps         = 0;
+      update.reward1Claimed = false;
+      update.reward2Claimed = false;
+    }
+
+    await docRef.update(update);
+    closeModal('modal-redeem');
+    redeemType = null;
+
+    const msg = redeemType === null
+      ? (update.reward1Claimed !== undefined ? '🍛 Free chaat given!' : '🎉 Chaat + Chai redeemed! Card reset!')
+      : '🎉 Reward redeemed!';
+    toast(update.stamps === 0 ? '🎉 Chaat + Chai redeemed! Card reset!' : '🍛 Free chaat given!');
+
+    await loadCustomers();
+    openCustomer(currentCustId);
+  } catch(e) {
+    console.error(e);
+    toast('❌ Error: ' + e.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TRANSACTION HISTORY
+══════════════════════════════════════════════════════════════ */
+async function openHistory () {
+  if (!currentCustId) return;
+  try {
+    const snap = await db.collection('customers').doc(currentCustId).get();
+    const c    = snap.data();
+    const txs  = (c.transactions || []).slice().reverse(); // newest first
+
+    document.getElementById('history-cust-name').textContent = `📜 ${c.name}'s history`;
+
+    if (!txs.length) {
+      document.getElementById('tx-list').innerHTML =
+        '<div class="empty-state"><div class="emoji">📭</div><div>No transactions yet</div></div>';
+    } else {
+      document.getElementById('tx-list').innerHTML = txs.map(t => {
+        const d   = t.date ? new Date(t.date) : null;
+        const ds  = d ? d.toLocaleDateString('de-DE', { day:'2-digit', month:'short', year:'numeric' }) + ' ' +
+                        d.toLocaleTimeString('de-DE', { hour:'2-digit', minute:'2-digit' }) : '';
+        let icon, title, badge = '';
+        if (t.type === 'purchase') {
+          icon  = '🛒';
+          title = `Purchase – €${(t.amount||0).toFixed(2)}`;
+          badge = `+${t.stampsAdded||0} 🌶️`;
+        } else if (t.type === 'redeem_chaat') {
+          icon  = '🍛';
+          title = 'Free Chaat Redeemed';
+          badge = '🎁';
+        } else {
+          icon  = '🎉';
+          title = 'Chaat + Chai Redeemed';
+          badge = '🎁🎁';
+        }
+        return `
+          <div class="tx-row">
+            <div class="tx-icon">${icon}</div>
+            <div class="tx-info"><div class="tx-title">${title}</div><div class="tx-date">${ds}</div></div>
+            <div class="tx-badge">${badge}</div>
+          </div>`;
+      }).join('');
+    }
+    openModal('modal-history');
+  } catch(e) {
+    toast('❌ Could not load history');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UI HELPERS
+══════════════════════════════════════════════════════════════ */
+function showPage (pageId) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById(pageId).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function goHome () {
+  currentCustId = null;
+  showPage('page-home');
+}
+
+function openModal (id) {
+  document.getElementById(id).classList.add('open');
+}
+
+function closeModal (id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+function overlayClose (ev, id) {
+  if (ev.target === document.getElementById(id)) closeModal(id);
+}
+
+let toastTimer;
+function toast (msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function esc (s) {
+  return String(s||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+/* ─── Bootstrap ─────────────────────────────────────────── */
+initApp();
+</script>
+
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  🚀  DEPLOYMENT GUIDE  –  GitHub Pages + Firebase                          ║
+║  Read this once, follow the steps, then delete this comment block if you   ║
+║  wish (the app works fine with it present).                                 ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  PART 1 ── FIREBASE (free cloud database, no credit card needed)            ║
+║                                                                              ║
+║  Step 1  Go to  https://console.firebase.google.com                         ║
+║  Step 2  Click "Add project" → name it e.g. "chaat-hannover"               ║
+║          → disable Google Analytics (optional) → Create project             ║
+║  Step 3  In the left menu click "Firestore Database"                        ║
+║          → Create database → choose "Start in test mode" → Next             ║
+║          → Pick the europe-west3 (Frankfurt) location → Enable              ║
+║  Step 4  Click the ⚙️ gear next to "Project Overview" → Project settings   ║
+║          Scroll to "Your apps" → click </> (Web)                            ║
+║          App nickname: "Loyalty Card" → Register app                        ║
+║          You will see a firebaseConfig block with real values.               ║
+║          Copy those values into the FIREBASE_CONFIG at the top of this file ║
+║                                                                              ║
+║  Step 5  IMPORTANT – Firestore Security Rules (allow your app to write)     ║
+║          In Firebase console → Firestore → Rules tab → replace content with:║
+║                                                                              ║
+║    rules_version = '2';                                                      ║
+║    service cloud.firestore {                                                  ║
+║      match /databases/{database}/documents {                                 ║
+║        match /customers/{doc} {                                              ║
+║          allow read, write: if true;  // 🔒 tighten later                   ║
+║        }                                                                     ║
+║      }                                                                       ║
+║    }                                                                         ║
+║                                                                              ║
+║          Click "Publish".                                                    ║
+║                                                                              ║
+║  ─────────────────────────────────────────────────────────────────────────  ║
+║                                                                              ║
+║  PART 2 ── GITHUB PAGES (free hosting, no server needed)                    ║
+║                                                                              ║
+║  Step 6  Create a free account at  https://github.com  (if you don't have) ║
+║  Step 7  Click the + at top right → New repository                          ║
+║          Name: chaat-loyalty  (or any name)                                  ║
+║          Visibility: Public  ← required for free GitHub Pages               ║
+║          Click "Create repository"                                           ║
+║  Step 8  On the new repo page click "uploading an existing file"            ║
+║          Drag and drop  index.html  → Commit changes → Commit directly      ║
+║  Step 9  Go to Settings (⚙️ tab) → Pages (left menu)                       ║
+║          Source: Deploy from a branch                                        ║
+║          Branch: main  /  (root)  → Save                                    ║
+║  Step 10 Wait ~60 seconds → refresh the Settings→Pages page                 ║
+║          Your live URL will appear:                                          ║
+║          https://YOUR_GITHUB_USERNAME.github.io/chaat-loyalty/              ║
+║                                                                              ║
+║  ─────────────────────────────────────────────────────────────────────────  ║
+║                                                                              ║
+║  PART 3 ── UPDATE FIREBASE CONFIG IN THE FILE                               ║
+║                                                                              ║
+║  Step 11 Open index.html in Notepad (or any text editor)                    ║
+║          Find the FIREBASE_CONFIG block (search for "YOUR_API_KEY")         ║
+║          Replace each "YOUR_..." value with the real value from Step 4      ║
+║  Step 12 Go back to your GitHub repo → click index.html → ✏️ Edit icon      ║
+║          Select all → paste your updated file → Commit changes              ║
+║          (Or use GitHub Desktop / git if you prefer)                        ║
+║                                                                              ║
+║  ─────────────────────────────────────────────────────────────────────────  ║
+║                                                                              ║
+║  ✅  DONE!  Open the URL from Step 10 on your phone and tablet.             ║
+║      All staff use the SAME URL — data syncs via Firebase in real time.     ║
+║                                                                              ║
+║  USAGE                                                                       ║
+║  • Tap ＋ to register a new customer                                         ║
+║  • Tap a customer → "Add Purchase" → enter € amount → stamps added auto     ║
+║  • "Redeem" button appears when stamps reach 10 or 20                        ║
+║  • After 20-stamp reward the card resets to 0 automatically                 ║
+║                                                                              ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+</body>
+</html>
